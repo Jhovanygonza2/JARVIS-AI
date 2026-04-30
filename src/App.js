@@ -7,9 +7,7 @@ import "./App.css";
 const YT_API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
 
 function App() {
-  const canvasRef      = useRef(null);
   const historialRef   = useRef(null);
-  const angleRef       = useRef(0);
   const animFrameRef   = useRef(null);
   const clockRef       = useRef(null);
   const silenceTimer   = useRef(null);   // timeout de silencio tipo Alexa
@@ -45,14 +43,14 @@ function App() {
   /* ============================= */
   /* VOZ                           */
   /* ============================= */
-  function hablar(texto) {
+  const hablar = React.useCallback((texto) => {
     window.speechSynthesis.cancel();
     const s = new SpeechSynthesisUtterance(texto);
     s.lang  = "es-MX";
     s.rate  = 0.9;
     s.pitch = 1.1;
     window.speechSynthesis.speak(s);
-  }
+  }, []);
 
   /* ============================= */
   /* ESFERA HOLOGRÁFICA            */
@@ -74,7 +72,12 @@ function App() {
   /* ============================= */
   /* YOUTUBE: BUSCAR               */
   /* ============================= */
-  async function buscarYouTube(query) {
+  const responder = React.useCallback((texto) => {
+    setHistorial((prev) => [...prev, { usuario: "", jarvis: texto }]);
+    hablar(texto);
+  }, [hablar]);
+
+  const buscarYouTube = React.useCallback(async (query) => {
     setCargando(true);
     setEstado("BUSCANDO...");
     try {
@@ -105,12 +108,12 @@ function App() {
     }
     setCargando(false);
     setEstado("EN ESPERA");
-  }
+  }, [responder]);
 
   /* ============================= */
   /* YOUTUBE: REPRODUCIR           */
   /* ============================= */
-  function reproducirVideo(video) {
+  const reproducirVideo = React.useCallback((video) => {
     setVideoActivo(video);
     setResultados([]);
     hablar("Reproduciendo " + video.titulo);
@@ -118,19 +121,16 @@ function App() {
       ...prev,
       { usuario: "▶ " + video.titulo, jarvis: "Reproduciendo ahora." },
     ]);
-  }
+  }, [hablar]);
 
-  function cerrarVideo() {
+  const cerrarVideo = React.useCallback(() => {
     setVideoActivo(null);
     setPanelYT(false);
     setResultados([]);
     hablar("Video cerrado.");
-  }
+  }, [hablar]);
 
-  /* ============================= */
-  /* CONVERSACIÓN LOCAL            */
-  /* ============================= */
-  function conversar(texto) {
+  const conversar = React.useCallback((texto) => {
     if (texto.includes("como estas") || texto.includes("cómo estás"))
       return "Todos los sistemas operando al máximo rendimiento.";
     if (texto.includes("quien eres") || texto.includes("quién eres"))
@@ -156,12 +156,12 @@ function App() {
     if (texto.includes("nombre"))
       return "Mi nombre es Jarvis. Sistema de asistencia virtual de próxima generación.";
     return "Entendido. ¿Hay algo más en lo que pueda asistirte?";
-  }
+  }, []);
 
   /* ============================= */
   /* COMANDOS DE VOZ               */
   /* ============================= */
-  async function procesarComando(comando) {
+  const procesarComando = React.useCallback(async (comando) => {
     setCargando(true);
     setEstado("PROCESANDO...");
 
@@ -246,12 +246,8 @@ function App() {
     hablar(respuesta);
     setCargando(false);
     setEstado("EN ESPERA");
-  }
+  }, [buscarYouTube, cerrarVideo, conversar, hablar, reproducirVideo, resultados]);
 
-  function responder(texto) {
-    setHistorial((prev) => [...prev, { usuario: "", jarvis: texto }]);
-    hablar(texto);
-  }
 
   /* ============================= */
   /* EFECTOS                       */
@@ -261,7 +257,6 @@ function App() {
     if (transcript === "" || transcript === lastTranscript.current) return;
     lastTranscript.current = transcript;
 
-    // Reiniciar el timer cada vez que llega texto nuevo
     if (silenceTimer.current) clearTimeout(silenceTimer.current);
 
     silenceTimer.current = setTimeout(() => {
@@ -271,8 +266,8 @@ function App() {
         resetTranscript();
         lastTranscript.current = "";
       }
-    }, 1500); // 1.5 segundos de silencio = listo para procesar
-  }, [transcript]);
+    }, 1500);
+  }, [transcript, procesarComando, resetTranscript]);
 
   useEffect(() => {
     if (historialRef.current)
@@ -282,15 +277,20 @@ function App() {
   useEffect(() => {
     iniciarEsfera();
     SpeechRecognition.startListening({ continuous: true, language: "es-MX", interimResults: true });
-    setTimeout(() => {
+    
+    const welcomeTimeout = setTimeout(() => {
       hablar("Sistema Jarvis activado. Listo para recibir instrucciones.");
       setEstado("EN ESPERA");
       setBootDone(true);
     }, 1000);
+
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      clearTimeout(welcomeTimeout);
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
     };
-  }, []);
+  }, [hablar]);
 
   /* ============================= */
   /* STATUS CONFIG                 */

@@ -6,8 +6,20 @@ const Orb3D = ({ analyser, listening, processing }) => {
   const sphereRef = useRef(null);
   const particlesRef = useRef(null);
   const ringsRef = useRef([]);
+  
+  // Refs to store state without re-running the main effect
+  const listeningRef = useRef(listening);
+  const processingRef = useRef(processing);
 
   useEffect(() => {
+    listeningRef.current = listening;
+    processingRef.current = processing;
+  }, [listening, processing]);
+
+  useEffect(() => {
+    const currentMount = mountRef.current;
+    if (!currentMount) return;
+    
     // Scene setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
@@ -19,7 +31,7 @@ const Orb3D = ({ analyser, listening, processing }) => {
     });
     renderer.setSize(380, 380);
     renderer.setPixelRatio(window.devicePixelRatio);
-    mountRef.current.appendChild(renderer.domElement);
+    currentMount.appendChild(renderer.domElement);
 
     // Geometry & Materials
     const geometry = new THREE.IcosahedronGeometry(1.5, 4);
@@ -46,7 +58,7 @@ const Orb3D = ({ analyser, listening, processing }) => {
     const innerSphere = new THREE.Mesh(innerGeo, innerMat);
     scene.add(innerSphere);
 
-    // Particles (stars/dust around)
+    // Particles
     const partGeo = new THREE.BufferGeometry();
     const partCount = 200;
     const posArray = new Float32Array(partCount * 3);
@@ -66,6 +78,7 @@ const Orb3D = ({ analyser, listening, processing }) => {
 
     // Rings
     const ringGroup = new THREE.Group();
+    const rings = [];
     for (let i = 0; i < 3; i++) {
       const rGeo = new THREE.TorusGeometry(2 + i * 0.4, 0.01, 16, 100);
       const rMat = new THREE.MeshBasicMaterial({
@@ -77,8 +90,9 @@ const Orb3D = ({ analyser, listening, processing }) => {
       ring.rotation.x = Math.random() * Math.PI;
       ring.rotation.y = Math.random() * Math.PI;
       ringGroup.add(ring);
-      ringsRef.current.push(ring);
+      rings.push(ring);
     }
+    ringsRef.current = rings;
     scene.add(ringGroup);
 
     // Lights
@@ -88,7 +102,6 @@ const Orb3D = ({ analyser, listening, processing }) => {
     pointLight.position.set(5, 5, 5);
     scene.add(pointLight);
 
-    // Audio Buffer
     const audioData = new Uint8Array(128);
 
     // Animation loop
@@ -96,17 +109,15 @@ const Orb3D = ({ analyser, listening, processing }) => {
     const animate = () => {
       frameId = requestAnimationFrame(animate);
 
-      // Rotation
       sphere.rotation.y += 0.005;
       sphere.rotation.x += 0.002;
       particles.rotation.y -= 0.001;
 
-      ringsRef.current.forEach((ring, i) => {
+      rings.forEach((ring, i) => {
         ring.rotation.z += 0.01 * (i + 1);
         ring.rotation.y += 0.005;
       });
 
-      // Audio Reaction
       if (analyser) {
         analyser.getByteFrequencyData(audioData);
         let sum = 0;
@@ -117,7 +128,6 @@ const Orb3D = ({ analyser, listening, processing }) => {
         sphere.scale.set(scale, scale, scale);
         material.emissiveIntensity = average / 64;
         
-        // Deform geometry based on audio (subtle)
         const positions = geometry.attributes.position.array;
         for (let i = 0; i < positions.length; i += 3) {
           const vertex = new THREE.Vector3(positions[i], positions[i+1], positions[i+2]);
@@ -128,21 +138,20 @@ const Orb3D = ({ analyser, listening, processing }) => {
         }
         geometry.attributes.position.needsUpdate = true;
       } else {
-        // Idle pulse
         const time = Date.now() * 0.002;
         const scale = 1 + Math.sin(time) * 0.05;
         sphere.scale.set(scale, scale, scale);
       }
 
-      // Listening/Processing states
-      if (listening) {
-        material.color.setHex(0x10b981); // Greenish
+      // Use refs to get latest status without re-running effect
+      if (listeningRef.current) {
+        material.color.setHex(0x10b981);
         material.emissive.setHex(0x10b981);
-      } else if (processing) {
-        material.color.setHex(0xf59e0b); // Amber
+      } else if (processingRef.current) {
+        material.color.setHex(0xf59e0b);
         material.emissive.setHex(0xf59e0b);
       } else {
-        material.color.setHex(0x00e5ff); // Cyan
+        material.color.setHex(0x00e5ff);
         material.emissive.setHex(0x00e5ff);
       }
 
@@ -153,11 +162,15 @@ const Orb3D = ({ analyser, listening, processing }) => {
 
     return () => {
       cancelAnimationFrame(frameId);
-      if (mountRef.current) mountRef.current.removeChild(renderer.domElement);
+      if (currentMount) currentMount.removeChild(renderer.domElement);
       geometry.dispose();
       material.dispose();
+      innerGeo.dispose();
+      innerMat.dispose();
+      partGeo.dispose();
+      partMat.dispose();
     };
-  }, [analyser]); // Re-run if analyser changes
+  }, [analyser]);
 
   return <div ref={mountRef} className="orb-3d-container" />;
 };
