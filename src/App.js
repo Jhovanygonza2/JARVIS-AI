@@ -53,6 +53,20 @@ function App() {
   }, []);
 
   /* ============================= */
+  /* ABRIR URL (sin popup blocker) */
+  /* ============================= */
+  function abrirURL(url) {
+    // Crea un enlace temporal y lo hace click para evitar el popup blocker del navegador
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  /* ============================= */
   /* ESFERA HOLOGRÁFICA            */
   /* ============================= */
   function iniciarEsfera() {
@@ -80,32 +94,47 @@ function App() {
   const buscarYouTube = React.useCallback(async (query) => {
     setCargando(true);
     setEstado("BUSCANDO...");
-    try {
-      const url  = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&type=video&q=${encodeURIComponent(query)}&key=${YT_API_KEY}`;
-      const res  = await fetch(url);
-      const json = await res.json();
 
-      if (!json.items || json.items.length === 0) {
-        responder("No encontré resultados para " + query);
-        setCargando(false);
-        setEstado("EN ESPERA");
-        return;
+    // Si hay API key, usar la API de YouTube para mostrar resultados en panel
+    if (YT_API_KEY) {
+      try {
+        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&type=video&q=${encodeURIComponent(query)}&key=${YT_API_KEY}`;
+        const res  = await fetch(url);
+        const json = await res.json();
+
+        if (json.error) {
+          console.error("YouTube API error:", json.error.message);
+          // Fallback: abrir YouTube directamente
+          abrirURL(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`);
+          responder(`Buscando "${query}" en YouTube. Abriendo en el navegador.`);
+          setCargando(false);
+          setEstado("EN ESPERA");
+          return;
+        }
+
+        if (json.items && json.items.length > 0) {
+          const videos = json.items.map((item) => ({
+            id:        item.id.videoId,
+            titulo:    item.snippet.title,
+            canal:     item.snippet.channelTitle,
+            thumbnail: item.snippet.thumbnails.medium.url,
+          }));
+          setResultados(videos);
+          setPanelYT(true);
+          setVideoActivo(null);
+          responder(`Encontré ${videos.length} videos de "${query}". Di el número para reproducir.`);
+          setCargando(false);
+          setEstado("EN ESPERA");
+          return;
+        }
+      } catch (err) {
+        console.error("Error llamando API YouTube:", err);
       }
-
-      const videos = json.items.map((item) => ({
-        id:        item.id.videoId,
-        titulo:    item.snippet.title,
-        canal:     item.snippet.channelTitle,
-        thumbnail: item.snippet.thumbnails.medium.url,
-      }));
-
-      setResultados(videos);
-      setPanelYT(true);
-      setVideoActivo(null);
-      responder(`Encontré ${videos.length} videos. ¿Cuál quieres ver?`);
-    } catch {
-      responder("Error al buscar en YouTube. Verifica tu API key.");
     }
+
+    // Fallback: abrir YouTube Search en el navegador directamente
+    abrirURL(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`);
+    responder(`Buscando "${query}" en YouTube. Abriendo en el navegador.`);
     setCargando(false);
     setEstado("EN ESPERA");
   }, [responder]);
@@ -210,34 +239,50 @@ function App() {
     } else if (comando.includes("fecha")) {
       respuesta = "Hoy es " + new Date().toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
     } else if (comando.includes("youtube")) {
-      window.open("https://youtube.com", "_blank");
+      abrirURL("https://youtube.com");
       respuesta = "Abriendo YouTube.";
     } else if (comando.includes("spotify")) {
       const q = comando.replace("spotify", "").trim();
-      window.open(`https://open.spotify.com/search/${encodeURIComponent(q)}`, "_blank");
+      abrirURL(`https://open.spotify.com/search/${encodeURIComponent(q || "")}`);
       respuesta = q ? `Buscando ${q} en Spotify.` : "Abriendo Spotify.";
     } else if (comando.includes("buscar")) {
       const q = comando.replace("buscar", "").trim();
-      window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`, "_blank");
+      abrirURL(`https://www.google.com/search?q=${encodeURIComponent(q)}`);
       respuesta = `Buscando ${q} en Google.`;
     } else if (comando.includes("gmail") || comando.includes("correo")) {
-      window.open("https://mail.google.com", "_blank");
+      abrirURL("https://mail.google.com");
       respuesta = "Abriendo Gmail.";
     } else if (comando.includes("drive")) {
-      window.open("https://drive.google.com", "_blank");
+      abrirURL("https://drive.google.com");
       respuesta = "Abriendo Google Drive.";
     } else if (comando.includes("whatsapp")) {
-      window.open("https://web.whatsapp.com", "_blank");
+      abrirURL("https://web.whatsapp.com");
       respuesta = "Abriendo WhatsApp Web.";
     } else if (comando.includes("mapas")) {
-      window.open("https://maps.google.com", "_blank");
+      abrirURL("https://maps.google.com");
       respuesta = "Abriendo Google Maps.";
     } else if (comando.includes("calculadora")) {
-      window.open("https://www.google.com/search?q=calculadora", "_blank");
+      abrirURL("https://www.google.com/search?q=calculadora");
       respuesta = "Calculadora activada.";
     } else if (comando.includes("traductor")) {
-      window.open("https://translate.google.com", "_blank");
+      abrirURL("https://translate.google.com");
       respuesta = "Traductor activado.";
+    } else if (comando.includes("netflix")) {
+      abrirURL("https://www.netflix.com");
+      respuesta = "Abriendo Netflix.";
+    } else if (comando.includes("instagram")) {
+      abrirURL("https://www.instagram.com");
+      respuesta = "Abriendo Instagram.";
+    } else if (comando.includes("twitter") || comando.includes("x")) {
+      abrirURL("https://x.com");
+      respuesta = "Abriendo X.";
+    } else if (comando.includes("github")) {
+      abrirURL("https://github.com");
+      respuesta = "Abriendo GitHub.";
+    } else if (comando.includes("clima") || comando.includes("tiempo en")) {
+      const ciudad = comando.replace("clima", "").replace("tiempo en", "").trim();
+      abrirURL(`https://www.google.com/search?q=clima+${encodeURIComponent(ciudad || "mi ciudad")}`);
+      respuesta = ciudad ? `Buscando el clima de ${ciudad}.` : "Buscando el clima.";
     } else {
       respuesta = conversar(comando);
     }
@@ -464,10 +509,15 @@ function App() {
                 ["video de...",    "Buscar en YouTube"],
                 ["hora / fecha",   "Consultar tiempo"],
                 ["buscar...",      "Google Search"],
+                ["clima de...",    "Ver el clima"],
                 ["spotify...",     "Abrir Spotify"],
                 ["gmail / drive",  "Google Apps"],
                 ["whatsapp",       "WhatsApp Web"],
                 ["mapas",          "Google Maps"],
+                ["netflix",        "Abrir Netflix"],
+                ["instagram",      "Abrir Instagram"],
+                ["github",         "Abrir GitHub"],
+                ["traductor",      "Google Translate"],
               ].map(([cmd, desc]) => (
                 <div key={cmd} className="sbr-cmd-row">
                   <span className="sbr-cmd-key">{cmd}</span>
