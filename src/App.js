@@ -1,19 +1,20 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 import Orb3D from "./Orb3D";
 import "./App.css";
 
-// ⚠️ Clave de YouTube Data API v3 (ahora desde .env)
 const YT_API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
 
 function App() {
   const historialRef   = useRef(null);
-  const animFrameRef   = useRef(null);
   const clockRef       = useRef(null);
-  const silenceTimer   = useRef(null);   // timeout de silencio tipo Alexa
+  const silenceTimer   = useRef(null);
   const lastTranscript = useRef("");
+  const analyserRef    = useRef(null);
+  // Refs para evitar closures stale en el effect de voz
+  const resultadosRef  = useRef([]);
 
-  const { transcript, resetTranscript, listening } = useSpeechRecognition();
+  const { transcript, resetTranscript, listening, browserSupportsSpeechRecognition } = useSpeechRecognition();
 
   const [historial,   setHistorial]   = useState([]);
   const [cargando,    setCargando]    = useState(false);
@@ -24,7 +25,10 @@ function App() {
   const [horaActual,  setHoraActual]  = useState("");
   const [fechaActual, setFechaActual] = useState("");
   const [bootDone,    setBootDone]    = useState(false);
-  const analyserRef = useRef(null);
+  const [micError,    setMicError]    = useState(false);
+
+  // Mantener resultadosRef sincronizado con el estado
+  useEffect(() => { resultadosRef.current = resultados; }, [resultados]);
 
   /* ============================= */
   /* CLOCK                         */
@@ -43,20 +47,19 @@ function App() {
   /* ============================= */
   /* VOZ                           */
   /* ============================= */
-  const hablar = React.useCallback((texto) => {
+  function hablar(texto) {
     window.speechSynthesis.cancel();
     const s = new SpeechSynthesisUtterance(texto);
     s.lang  = "es-MX";
     s.rate  = 0.9;
     s.pitch = 1.1;
     window.speechSynthesis.speak(s);
-  }, []);
+  }
 
   /* ============================= */
   /* ABRIR URL (sin popup blocker) */
   /* ============================= */
   function abrirURL(url) {
-    // Crea un enlace temporal y lo hace click para evitar el popup blocker del navegador
     const a = document.createElement("a");
     a.href = url;
     a.target = "_blank";
@@ -72,47 +75,40 @@ function App() {
   function iniciarEsfera() {
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then((stream) => {
-        const actx    = new (window.AudioContext || window.webkitAudioContext)();
+        const actx     = new (window.AudioContext || window.webkitAudioContext)();
         const analyser = actx.createAnalyser();
         actx.createMediaStreamSource(stream).connect(analyser);
         analyser.fftSize = 256;
         analyserRef.current = analyser;
       })
       .catch((err) => {
-        console.error("Error al acceder al micrófono:", err);
+        console.warn("Micrófono no disponible:", err);
+        setMicError(true);
       });
+  }
+
+  /* ============================= */
+  /* RESPONDER                     */
+  /* ============================= */
+  function responder(texto) {
+    setHistorial((prev) => [...prev, { usuario: "", jarvis: texto }]);
+    hablar(texto);
   }
 
   /* ============================= */
   /* YOUTUBE: BUSCAR               */
   /* ============================= */
-  const responder = React.useCallback((texto) => {
-    setHistorial((prev) => [...prev, { usuario: "", jarvis: texto }]);
-    hablar(texto);
-  }, [hablar]);
-
-  const buscarYouTube = React.useCallback(async (query) => {
+  async function buscarYouTube(query) {
     setCargando(true);
     setEstado("BUSCANDO...");
 
-    // Si hay API key, usar la API de YouTube para mostrar resultados en panel
     if (YT_API_KEY) {
       try {
-        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&type=video&q=${encodeURIComponent(query)}&key=${YT_API_KEY}`;
+        const url  = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&type=video&q=${encodeURIComponent(query)}&key=${YT_API_KEY}`;
         const res  = await fetch(url);
         const json = await res.json();
 
-        if (json.error) {
-          console.error("YouTube API error:", json.error.message);
-          // Fallback: abrir YouTube directamente
-          abrirURL(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`);
-          responder(`Buscando "${query}" en YouTube. Abriendo en el navegador.`);
-          setCargando(false);
-          setEstado("EN ESPERA");
-          return;
-        }
-
-        if (json.items && json.items.length > 0) {
+        if (!json.error && json.items && json.items.length > 0) {
           const videos = json.items.map((item) => ({
             id:        item.id.videoId,
             titulo:    item.snippet.title,
@@ -128,21 +124,21 @@ function App() {
           return;
         }
       } catch (err) {
-        console.error("Error llamando API YouTube:", err);
+        console.error("Error API YouTube:", err);
       }
     }
 
-    // Fallback: abrir YouTube Search en el navegador directamente
+    // Fallback: abrir YouTube en el navegador
     abrirURL(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`);
-    responder(`Buscando "${query}" en YouTube. Abriendo en el navegador.`);
+    responder(`Buscando "${query}" en YouTube.`);
     setCargando(false);
     setEstado("EN ESPERA");
-  }, [responder]);
+  }
 
   /* ============================= */
   /* YOUTUBE: REPRODUCIR           */
   /* ============================= */
-  const reproducirVideo = React.useCallback((video) => {
+  function reproducirVideo(video) {
     setVideoActivo(video);
     setResultados([]);
     hablar("Reproduciendo " + video.titulo);
@@ -150,22 +146,25 @@ function App() {
       ...prev,
       { usuario: "▶ " + video.titulo, jarvis: "Reproduciendo ahora." },
     ]);
-  }, [hablar]);
+  }
 
-  const cerrarVideo = React.useCallback(() => {
+  function cerrarVideo() {
     setVideoActivo(null);
     setPanelYT(false);
     setResultados([]);
     hablar("Video cerrado.");
-  }, [hablar]);
+  }
 
-  const conversar = React.useCallback((texto) => {
+  /* ============================= */
+  /* CONVERSACIÓN LOCAL            */
+  /* ============================= */
+  function conversar(texto) {
     if (texto.includes("como estas") || texto.includes("cómo estás"))
       return "Todos los sistemas operando al máximo rendimiento.";
     if (texto.includes("quien eres") || texto.includes("quién eres"))
       return "Soy Jarvis, tu asistente virtual inteligente.";
     if (texto.includes("que puedes hacer") || texto.includes("qué puedes hacer"))
-      return "Puedo buscar y reproducir videos de YouTube, abrir apps, decirte la hora y conversar contigo.";
+      return "Puedo buscar videos en YouTube, abrir aplicaciones, decirte la hora y conversar contigo.";
     if (texto.includes("gracias"))
       return "Con gusto. Para eso estoy aquí.";
     if (texto.includes("buenos dias") || texto.includes("buenos días"))
@@ -180,52 +179,56 @@ function App() {
       return "Hasta luego. Sistemas en espera.";
     if (texto.includes("chiste") || texto.includes("broma"))
       return "¿Por qué los robots nunca mienten? Porque no tienen memoria para sus mentiras.";
-    if (texto.includes("clima") || texto.includes("tiempo"))
-      return "No tengo datos meteorológicos. Te recomiendo buscar el clima en Google.";
     if (texto.includes("nombre"))
       return "Mi nombre es Jarvis. Sistema de asistencia virtual de próxima generación.";
     return "Entendido. ¿Hay algo más en lo que pueda asistirte?";
-  }, []);
+  }
 
   /* ============================= */
   /* COMANDOS DE VOZ               */
   /* ============================= */
-  const procesarComando = React.useCallback(async (comando) => {
+  async function procesarComando(comando) {
+    console.log("🎤 Comando recibido:", comando);
     setCargando(true);
     setEstado("PROCESANDO...");
 
+    // YouTube
     if (
       comando.includes("video de") ||
       comando.includes("busca en youtube") ||
+      comando.includes("buscar en youtube") ||
       comando.includes("pon música de") ||
-      comando.includes("reproduce")
+      comando.includes("reproduce") ||
+      comando.includes("ponme")
     ) {
       const q = comando
-        .replace("video de", "")
-        .replace("busca en youtube", "")
-        .replace("pon música de", "")
-        .replace("reproduce", "")
+        .replace(/video de|busca en youtube|buscar en youtube|pon música de|reproduce|ponme/g, "")
         .trim();
       await buscarYouTube(q || "música");
       return;
     }
 
-    if (resultados.length > 0) {
-      const nums = ["primero", "segundo", "tercero", "cuarto", "quinto"];
+    // Seleccionar video por número
+    const resultadosActuales = resultadosRef.current;
+    if (resultadosActuales.length > 0) {
+      const nums = ["primero", "segundo", "tercero", "cuarto", "quinto", "uno", "dos", "tres", "cuatro", "cinco", "1", "2", "3", "4", "5"];
       const idx  = nums.findIndex((n) => comando.includes(n));
-      if (idx !== -1 && resultados[idx]) {
-        reproducirVideo(resultados[idx]);
+      const realIdx = idx >= 5 ? idx - 5 : idx; // "uno" -> 0, "dos" -> 1, etc.
+      if (idx !== -1 && resultadosActuales[realIdx]) {
+        reproducirVideo(resultadosActuales[realIdx]);
         setCargando(false);
         setEstado("EN ESPERA");
         return;
       }
     }
 
+    // Cerrar video
     if (
       comando.includes("cerrar video") ||
       comando.includes("detener video") ||
       comando.includes("parar video") ||
-      comando.includes("cierra el video")
+      comando.includes("cierra el video") ||
+      comando.includes("para el video")
     ) {
       cerrarVideo();
       setCargando(false);
@@ -236,17 +239,17 @@ function App() {
     let respuesta = "";
     if (comando.includes("hora")) {
       respuesta = "Son las " + new Date().toLocaleTimeString("es-MX");
-    } else if (comando.includes("fecha")) {
+    } else if (comando.includes("fecha") || comando.includes("día es hoy") || comando.includes("dia es hoy")) {
       respuesta = "Hoy es " + new Date().toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-    } else if (comando.includes("youtube")) {
+    } else if (comando.includes("youtube") && !comando.includes("buscar")) {
       abrirURL("https://youtube.com");
       respuesta = "Abriendo YouTube.";
     } else if (comando.includes("spotify")) {
       const q = comando.replace("spotify", "").trim();
       abrirURL(`https://open.spotify.com/search/${encodeURIComponent(q || "")}`);
       respuesta = q ? `Buscando ${q} en Spotify.` : "Abriendo Spotify.";
-    } else if (comando.includes("buscar")) {
-      const q = comando.replace("buscar", "").trim();
+    } else if (comando.includes("buscar") || comando.includes("busca")) {
+      const q = comando.replace("buscar", "").replace("busca", "").trim();
       abrirURL(`https://www.google.com/search?q=${encodeURIComponent(q)}`);
       respuesta = `Buscando ${q} en Google.`;
     } else if (comando.includes("gmail") || comando.includes("correo")) {
@@ -258,13 +261,13 @@ function App() {
     } else if (comando.includes("whatsapp")) {
       abrirURL("https://web.whatsapp.com");
       respuesta = "Abriendo WhatsApp Web.";
-    } else if (comando.includes("mapas")) {
+    } else if (comando.includes("mapas") || comando.includes("maps")) {
       abrirURL("https://maps.google.com");
       respuesta = "Abriendo Google Maps.";
     } else if (comando.includes("calculadora")) {
       abrirURL("https://www.google.com/search?q=calculadora");
       respuesta = "Calculadora activada.";
-    } else if (comando.includes("traductor")) {
+    } else if (comando.includes("traductor") || comando.includes("traducir")) {
       abrirURL("https://translate.google.com");
       respuesta = "Traductor activado.";
     } else if (comando.includes("netflix")) {
@@ -273,7 +276,7 @@ function App() {
     } else if (comando.includes("instagram")) {
       abrirURL("https://www.instagram.com");
       respuesta = "Abriendo Instagram.";
-    } else if (comando.includes("twitter") || comando.includes("x")) {
+    } else if (comando.includes("twitter") || comando.includes("twiter")) {
       abrirURL("https://x.com");
       respuesta = "Abriendo X.";
     } else if (comando.includes("github")) {
@@ -281,8 +284,8 @@ function App() {
       respuesta = "Abriendo GitHub.";
     } else if (comando.includes("clima") || comando.includes("tiempo en")) {
       const ciudad = comando.replace("clima", "").replace("tiempo en", "").trim();
-      abrirURL(`https://www.google.com/search?q=clima+${encodeURIComponent(ciudad || "mi ciudad")}`);
-      respuesta = ciudad ? `Buscando el clima de ${ciudad}.` : "Buscando el clima.";
+      abrirURL(`https://www.google.com/search?q=clima+${encodeURIComponent(ciudad || "")}`);
+      respuesta = ciudad ? `Buscando el clima de ${ciudad}.` : "Buscando el clima actual.";
     } else {
       respuesta = conversar(comando);
     }
@@ -291,51 +294,58 @@ function App() {
     hablar(respuesta);
     setCargando(false);
     setEstado("EN ESPERA");
-  }, [buscarYouTube, cerrarVideo, conversar, hablar, reproducirVideo, resultados]);
-
+  }
 
   /* ============================= */
-  /* EFECTOS                       */
+  /* EFECTO — TRANSCRIPT           */
   /* ============================= */
-  // Comportamiento tipo Alexa: procesa cuando el usuario deja de hablar (~1.5s de silencio)
   useEffect(() => {
-    if (transcript === "" || transcript === lastTranscript.current) return;
+    if (!transcript || transcript === lastTranscript.current) return;
     lastTranscript.current = transcript;
 
     if (silenceTimer.current) clearTimeout(silenceTimer.current);
 
     silenceTimer.current = setTimeout(() => {
       const cmd = transcript.trim();
-      if (cmd !== "") {
+      if (cmd) {
         procesarComando(cmd.toLowerCase());
         resetTranscript();
         lastTranscript.current = "";
       }
     }, 1500);
-  }, [transcript, procesarComando, resetTranscript]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transcript]);
 
+  /* ============================= */
+  /* EFECTO — SCROLL HISTORIAL     */
+  /* ============================= */
   useEffect(() => {
     if (historialRef.current)
       historialRef.current.scrollTop = historialRef.current.scrollHeight;
   }, [historial]);
 
+  /* ============================= */
+  /* EFECTO — BOOT                 */
+  /* ============================= */
   useEffect(() => {
     iniciarEsfera();
+
+    if (!browserSupportsSpeechRecognition) {
+      setEstado("NAVEGADOR SIN SOPORTE");
+      return;
+    }
+
     SpeechRecognition.startListening({ continuous: true, language: "es-MX", interimResults: true });
-    
-    const welcomeTimeout = setTimeout(() => {
+
+    const t = setTimeout(() => {
       hablar("Sistema Jarvis activado. Listo para recibir instrucciones.");
       setEstado("EN ESPERA");
       setBootDone(true);
     }, 1000);
 
-    return () => {
-      clearTimeout(welcomeTimeout);
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-      }
-    };
-  }, [hablar]);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ============================= */
   /* STATUS CONFIG                 */
@@ -380,9 +390,15 @@ function App() {
             <span className={`sbl-led ${panelYT ? "cyan" : "dim"}`} />
             <span>YT</span>
           </div>
+          {micError && (
+            <div className="sbl-ind">
+              <span className="sbl-led" style={{ background: "#f87171" }} />
+              <span>MIC</span>
+            </div>
+          )}
         </div>
         <div className="sbl-divider" />
-        <div className="sbl-version">v3.0</div>
+        <div className="sbl-version">v3.1</div>
       </aside>
 
       {/* ══════════════════════════════════
@@ -406,12 +422,12 @@ function App() {
           <span className="st-label">{statusLabels[statusMode]}</span>
         </div>
 
-        {/* — Esfera — */}
+        {/* — Esfera 3D — */}
         <div className="orb-wrap">
-          <Orb3D 
-            analyser={analyserRef.current} 
-            listening={statusMode === "live"} 
-            processing={statusMode === "proc"} 
+          <Orb3D
+            analyser={analyserRef.current}
+            listening={statusMode === "live"}
+            processing={statusMode === "proc"}
           />
           {transcript && (
             <div className="orb-transcript">
@@ -429,7 +445,7 @@ function App() {
           <div className="log-body">
             {historial.length === 0 && (
               <p className="log-empty">
-                Sistema listo · Di <em>"video de..."</em> para buscar en YouTube
+                Sistema listo · Di <em>"video de..."</em> o <em>"abre YouTube"</em>
               </p>
             )}
             {historial.map((item, i) => (
@@ -514,10 +530,10 @@ function App() {
                 ["gmail / drive",  "Google Apps"],
                 ["whatsapp",       "WhatsApp Web"],
                 ["mapas",          "Google Maps"],
-                ["netflix",        "Abrir Netflix"],
-                ["instagram",      "Abrir Instagram"],
-                ["github",         "Abrir GitHub"],
-                ["traductor",      "Google Translate"],
+                ["netflix",        "Netflix"],
+                ["instagram",      "Instagram"],
+                ["github",         "GitHub"],
+                ["traductor",      "Translate"],
               ].map(([cmd, desc]) => (
                 <div key={cmd} className="sbr-cmd-row">
                   <span className="sbr-cmd-key">{cmd}</span>
