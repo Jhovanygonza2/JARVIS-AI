@@ -1,70 +1,70 @@
-# Getting Started with Create React App
+# 🌌 J.A.R.V.I.S. - Virtual Assistant
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+**Just A Rather Very Intelligent System** is a next-generation virtual assistant built with React, featuring a stunning 3D holographic interface and voice-controlled capabilities.
 
-## Available Scripts
+![Jarvis HUD](https://img.shields.io/badge/Interface-3D_HUD-00e5ff?style=for-the-badge)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Three.js](https://img.shields.io/badge/Three.js-000000?style=for-the-badge&logo=three.dot.js&logoColor=white)
 
-In the project directory, you can run:
+## ✨ Features
 
-### `npm start`
+- **🗣️ Advanced Voice Recognition**: Natural interaction using `react-speech-recognition`.
+- **💠 3D Holographic Orb**: A high-performance 3D sphere built with `Three.js` that reacts dynamically to your voice frequency.
+- **📺 YouTube Integration**: Search and play videos directly through voice commands.
+- **🛠️ Productivity Tools**: Open Google Apps (Drive, Gmail, Maps), Spotify, WhatsApp, and more.
+- **🕒 Real-time Status**: Live clock, date, and system status indicators.
+- **🔐 Secure API Management**: Environment-based configuration for API keys.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## 🚀 Quick Start
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### Prerequisites
+- Node.js (v16 or higher)
+- A YouTube Data API v3 Key
 
-### `npm test`
+### Installation
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Jhovanygonza2/Jarvis.git
+   cd Jarvis
+   ```
 
-### `npm run build`
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+3. **Environment Setup:**
+   Create a `.env` file in the root directory and add your YouTube API Key:
+   ```env
+   REACT_APP_YOUTUBE_API_KEY=your_api_key_here
+   ```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+4. **Run the application:**
+   ```bash
+   npm start
+   ```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## 🎙️ Command Samples
 
-### `npm run eject`
+- *"Video de Iron Man"* - Searches for Iron Man videos on YouTube.
+- *"Pon el primero"* - Plays the first result from the list.
+- *"Dime la hora"* - Jarvis tells you the current time.
+- *"Buscar galaxias en Google"* - Opens a Google search for galaxies.
+- *"Cerrar video"* - Stops the current YouTube playback.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## 🛠️ Tech Stack
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- **Frontend**: React.js
+- **3D Graphics**: Three.js
+- **Voice Recognition**: Web Speech API / react-speech-recognition
+- **Styling**: Vanilla CSS (Custom HUD Design)
+- **API**: YouTube Data API v3
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## 👤 Author
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+**Jhovanygonza2**
 
-## Learn More
+---
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+*This project is for educational and hobbyist purposes, inspired by the Marvel Cinematic Universe.*
