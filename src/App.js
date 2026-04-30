@@ -26,7 +26,7 @@ function App() {
   const [horaActual,  setHoraActual]  = useState("");
   const [fechaActual, setFechaActual] = useState("");
   const [bootDone,    setBootDone]    = useState(false);
-  const [audioData,   setAudioData]   = useState(null);
+  const analyserRef = useRef(null);
 
   /* ============================= */
   /* CLOCK                         */
@@ -64,15 +64,7 @@ function App() {
         const analyser = actx.createAnalyser();
         actx.createMediaStreamSource(stream).connect(analyser);
         analyser.fftSize = 256;
-        const buf  = analyser.frequencyBinCount;
-        const data = new Uint8Array(buf);
-
-        function updateAudio() {
-          animFrameRef.current = requestAnimationFrame(updateAudio);
-          analyser.getByteFrequencyData(data);
-          setAudioData(new Uint8Array(data)); // Clonar para disparar re-render
-        }
-        updateAudio();
+        analyserRef.current = analyser;
       })
       .catch((err) => {
         console.error("Error al acceder al micrófono:", err);
@@ -372,7 +364,7 @@ function App() {
         {/* — Esfera — */}
         <div className="orb-wrap">
           <Orb3D 
-            audioData={audioData} 
+            analyser={analyserRef.current} 
             listening={statusMode === "live"} 
             processing={statusMode === "proc"} 
           />

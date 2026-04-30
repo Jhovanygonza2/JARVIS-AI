@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 
-const Orb3D = ({ audioData, listening, processing }) => {
+const Orb3D = ({ analyser, listening, processing }) => {
   const mountRef = useRef(null);
   const sphereRef = useRef(null);
   const particlesRef = useRef(null);
@@ -88,6 +88,9 @@ const Orb3D = ({ audioData, listening, processing }) => {
     pointLight.position.set(5, 5, 5);
     scene.add(pointLight);
 
+    // Audio Buffer
+    const audioData = new Uint8Array(128);
+
     // Animation loop
     let frameId;
     const animate = () => {
@@ -104,7 +107,8 @@ const Orb3D = ({ audioData, listening, processing }) => {
       });
 
       // Audio Reaction
-      if (audioData) {
+      if (analyser) {
+        analyser.getByteFrequencyData(audioData);
         let sum = 0;
         for (let i = 0; i < audioData.length; i++) sum += audioData[i];
         const average = sum / audioData.length;
@@ -153,12 +157,7 @@ const Orb3D = ({ audioData, listening, processing }) => {
       geometry.dispose();
       material.dispose();
     };
-  }, []);
-
-  // Update audio effects even if main useEffect doesn't re-run
-  useEffect(() => {
-    // This is handled inside the animation loop via references
-  }, [audioData, listening, processing]);
+  }, [analyser]); // Re-run if analyser changes
 
   return <div ref={mountRef} className="orb-3d-container" />;
 };
